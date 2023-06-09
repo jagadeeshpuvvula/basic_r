@@ -35,6 +35,12 @@ install_packages(c("tidyverse", "janitor", "haven", "reshape2", "pacman", "skimr
                  "RJSONIO"))
 ```
 
+#tinytex for rmd files
+```{r}
+install.packages('tinytex')
+tinytex::install_tinytex()
+```
+
 #metaboanalyst setup
 ```{r}
 metanr_packages <- function(){
