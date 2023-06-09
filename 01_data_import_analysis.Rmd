@@ -1,0 +1,145 @@
+---
+title: "01_data_import_analysis"
+author: "Puvvula"
+date: "2023-06-09"
+output: pdf_document
+---
+
+```{r}
+library(pacman)
+
+pacman::p_load(tidyverse, janitor, haven, skimr, readr, reshape2, kableExtra, gridExtra)
+path <- "~/Documents/folder_location/"
+```
+
+#load local data (skip for now)
+```{r}
+#sas format
+dat <- read_sas(paste0(path, "data_name.sas7bdat")) |>
+  select(c(1,2,6,7,9,13,14,16,20,21,23,27,28))|> #select variables of interest
+  clean_names() |> #formatting variable names (removes spaces, upper case, "." or special charecters)
+  rename(group="participant_id") |> # rename variable names
+  mutate(mom_edu_cat = if_else(is.na(mari_st), "lt-bach", mom_edu_cat)) |> #converting multilevel variable to binary
+  select_if(~ mean(is.na(.)) < 0.2) |> #conditional selection of variables
+  filter(age< 999) #filter by variable values
+
+```
+
+#will use simulated data for now
+```{r}
+# Set the seed for reproducibility
+set.seed(123)
+
+df <- data.frame(
+  subject = 1:1000,
+  age = round(rnorm(1000, mean = 35, sd = 5)),
+  gender = sample(c("Male", "Female"), 1000, replace = TRUE),
+  race = sample(c("White", "Hispanic"), 1000, replace = TRUE),
+  income = round(runif(1000, min = 20000, max = 100000)),
+  gestational_age = round(runif(1000, min = 25, max = 42)),
+  stringsAsFactors = FALSE
+)
+
+# Set the user-defined values for metals
+metal_params <- list(
+  list(name = "phenol1", min = 0, max = 11, sd = 2, correlation = 0.5),
+  list(name = "phenol2", min = 0, max = 12, sd = 1.5, correlation = 0.7),
+  list(name = "phthalate1", min = 0, max = 8, sd = 1.6, correlation = 0.3),
+  list(name = "phthalate2", min = 0, max = 14, sd = 0.9, correlation = -0.2),
+  list(name = "phthalate3", min = 0, max = 6, sd = 1.8, correlation = 0.1)
+)
+
+# Add values for the user-defined metals
+for (params in metal_params) {
+  df[[params$name]] <- round(runif(1000, min = params$min, max = params$max) + rnorm(1000, mean = 0, sd = params$sd), 2)
+}
+
+# Set the user-defined values for outcomes
+outcome_params <- list(
+  list(name = "metb_1", mean = 25, sd = 8),
+  list(name = "metb_2", mean = 36, sd = 5),
+  list(name = "metb_3", mean = 20, sd = 9),
+  list(name = "metb_4", mean = 32, sd = 4),
+  list(name = "metb_5", mean = 29, sd = 8)
+)
+
+# Add values for the user-defined outcomes with correlation to metals
+for (params in outcome_params) {
+  df[[params$name]] <- rnorm(1000, mean = params$mean, sd = params$sd)
+  
+  # Apply correlation with metals
+  for (metal in metal_params) {
+    df[[params$name]] <- df[[params$name]] + metal$correlation * df[[metal$name]]
+  }
+}
+
+```
+
+#summaries and visualization
+```{r}
+summary_df <- df |>
+  pivot_longer(!c(1:6), names_to = "metric", values_to = "value")|>
+  group_by(metric) |>
+  summarize(median_conc = round(median(value),2),
+            percentile_25 = round(quantile(value, 0.25),2),
+            percentile_75 = round(quantile(value, 0.75),2))
+
+
+#same as a visual
+df |>
+  pivot_longer(!c(1:6, 11:16), names_to = "metric", values_to = "value")|>
+  ggplot(aes(x = metric, y = value)) +
+  geom_boxplot() +
+  labs(x = "Variable", y = "Value", title = "Box Plot")
+
+```
+
+```{r}
+#contingency table
+# Create the frequency table by gender and race
+freq_table <- table(df$gender, df$race)
+
+# Display the frequency table
+print(freq_table)
+```
+
+```{r}
+# Create the facet scatter plot
+ggplot(df, aes(x = metb_1, y = phenol1)) +
+  geom_point() +
+  geom_smooth(method='lm', formula= y~x)+
+  labs(x = "Metabolite intensity", 
+       y = "Phenol-1 concentration", 
+       title = "Scatter Plot of phenol-1 vs. metabolite-1 intensity")
+```
+
+```{r}
+#performing t-test
+t.test(df$phenol1 ~df$gender) # (continuous ~ categorical)
+```
+
+```{r}
+#create a contingency table - shows count
+tbl<- table(df$gender, df$race)
+#proportion table - shows percentage
+prop.table(table(df$gender, df$race))*100
+
+#visualize the table
+mosaicplot(tbl, main = "Title", color = T)
+
+#chi-square test
+chisq.test(tbl)
+
+#fisher-exact test
+fisher.test(tbl)
+```
+
+```{r}
+#linear model
+mod_lm<- lm(metb_1 ~ phenol1 + race+gender+age, dat=df)
+#generate linear model summary
+summary(mod_lm)
+plot(mod_lm)
+```
+
+
