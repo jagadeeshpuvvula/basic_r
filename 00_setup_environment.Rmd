@@ -35,7 +35,7 @@ install_packages(c("tidyverse", "janitor", "haven", "reshape2", "pacman", "skimr
                  "RJSONIO"))
 ```
 
-#tinytex for rmd files
+#tinytex installation
 ```{r}
 install.packages('tinytex')
 tinytex::install_tinytex()
